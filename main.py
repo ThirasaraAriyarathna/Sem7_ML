@@ -101,11 +101,20 @@ class Main:
         x_cross_sj = feature_selector.select_features(x_cross_sj, self.features, self.new_features)
         x_cross_iq = feature_selector.select_features(x_cross_iq, self.features, self.new_features)
 
-        reg_sj = RandomForestRegressor(max_depth=None, n_estimators=700, random_state=67)
-        accuracy_checker.cross_validate_out_of_sample(reg_sj, x_train_sj, y_train_sj.total_cases, x_cross_sj, y_cross_sj.total_cases)
+        reg_sj_gb = GradientBoostingRegressor(learning_rate=0.1, max_depth=5, n_estimators=500, random_state=67)
+        reg_iq_gb = GradientBoostingRegressor(learning_rate=0.1, max_depth=3, n_estimators=300, random_state=67)
 
-        reg_iq = RandomForestRegressor(max_depth=7, n_estimators=700, random_state=67)
-        accuracy_checker.cross_validate_out_of_sample(reg_iq, x_train_iq, y_train_iq.total_cases, x_cross_iq, y_cross_iq.total_cases)
+        reg_sj_rf = RandomForestRegressor(max_depth=None, n_estimators=700, random_state=67)
+        reg_iq_rf = RandomForestRegressor(max_depth=None, n_estimators=700, random_state=67)
+
+        y_sj_pred_m1, y_iq_pred_m1 = self.model_trainor(reg_sj_gb, reg_iq_gb, x_train_sj, y_train_sj, x_train_iq, y_train_iq, x_cross_sj, x_cross_iq, "gb")
+        y_sj_pred_m2, y_iq_pred_m2 = self.model_trainor(reg_sj_rf, reg_iq_rf, x_train_sj, y_train_sj, x_train_iq, y_train_iq, x_cross_sj, x_cross_iq, "rf")
+
+        y_sj_pred, y_iq_pred = self.ensemble_model(y_sj_pred_m1, y_sj_pred_m2, y_iq_pred_m1, y_iq_pred_m2, 5, 3)
+        print("San Juan:")
+        accuracy_checker.cross_validate_out_of_sample(y_sj_pred, y_cross_sj.total_cases)
+        print("Iquitos:")
+        accuracy_checker.cross_validate_out_of_sample(y_iq_pred, y_cross_iq.total_cases)
 
         predict_sj = x_test_sj[self.keys].copy()
         predict_iq = x_test_iq[self.keys].copy()
@@ -115,7 +124,15 @@ class Main:
         x_test_sj = feature_selector.select_features(x_test_sj, self.features, self.new_features)
         x_test_iq = feature_selector.select_features(x_test_iq, self.features, self.new_features)
 
-        y_sj_pred, y_iq_pred = self.model_trainor(x_sj, y_sj, x_iq, y_iq, x_test_sj, x_test_iq)
+        reg_sj_gb = GradientBoostingRegressor(learning_rate=0.1, max_depth=5, n_estimators=500, random_state=67)
+        reg_iq_gb = GradientBoostingRegressor(learning_rate=0.1, max_depth=3, n_estimators=300, random_state=67)
+
+        reg_sj_rf = RandomForestRegressor(max_depth=None, n_estimators=700, random_state=67)
+        reg_iq_rf = RandomForestRegressor(max_depth=None, n_estimators=700, random_state=67)
+
+        y_sj_pred_m1, y_iq_pred_m1 = self.model_trainor(reg_sj_gb, reg_iq_gb, x_sj, y_sj, x_iq, y_iq, x_test_sj, x_test_iq, "gb")
+        y_sj_pred_m2, y_iq_pred_m2 = self.model_trainor(reg_sj_rf, reg_iq_rf, x_sj, y_sj, x_iq, y_iq, x_test_sj, x_test_iq, "rf")
+        y_sj_pred, y_iq_pred = self.ensemble_model(y_sj_pred_m1, y_sj_pred_m2, y_iq_pred_m1, y_iq_pred_m2, 5, 3)
         predict_sj['total_cases'] = y_sj_pred.round().astype(int)
         predict_iq['total_cases'] = y_iq_pred.round().astype(int)
 
@@ -155,32 +172,31 @@ class Main:
 
         return y_train, x_train_sj, y_train_sj, x_train_iq, y_train_iq, x_test_sj, x_test_iq
 
-    def model_trainor(self, x_sj, y_sj, x_iq, y_iq, x_test_sj, x_test_iq):
+    def model_trainor(self, reg_sj, reg_iq, x_sj, y_sj, x_iq, y_iq, x_test_sj, x_test_iq, model):
 
-        reg_sj = GradientBoostingRegressor(learning_rate=0.1, max_depth=5, n_estimators=500, random_state=67)
         reg_sj.fit(x_sj, y_sj.total_cases)
 
-        filename = 'sj.sav'
+        filename = model + '_sj.sav'
         joblib.dump(reg_sj, "Models/" + filename)
 
-        reg_iq = GradientBoostingRegressor(learning_rate=0.1, max_depth=3, n_estimators=300, random_state=67)
         reg_iq.fit(x_iq, y_iq.total_cases)
 
-        filename = 'iq.sav'
-        joblib.dump(reg_iq, "Models/" + filename)
-
-        # reg_sj = RandomForestRegressor(max_depth=None, n_estimators=500, random_state=67)
-        # reg_sj.fit(x_sj, y_sj.total_cases)
-        # reg_iq = RandomForestRegressor(max_depth=None, n_estimators=500, random_state=67)
-        # reg_iq.fit(x_iq, y_iq.total_cases)
+        filename = model + '_iq.sav'
+        joblib.dump(reg_sj, "Models/" + filename)
 
         y_sj_pred = reg_sj.predict(x_test_sj)
         y_iq_pred = reg_iq.predict(x_test_iq)
 
         return y_sj_pred, y_iq_pred
 
+    def ensemble_model(self, model1_sj, model2_sj, model1_iq, model2_iq, m1_w, m2_w):
+        y_sj_pred = (m1_w * model1_sj + m2_w * model2_sj) / (m1_w + m2_w)
+        y_iq_pred = (m1_w * model1_iq + m2_w * model2_iq) / (m1_w + m2_w)
+        return y_sj_pred, y_iq_pred
+
+
     def write_results(self, predict_df):
-        submission_filename = 'Results/result_rf.csv'
+        submission_filename = 'Results/result.csv'
         predict_df.to_csv(submission_filename, index=False)
 
         df1 = pd.read_csv('Data/submission_format.csv',

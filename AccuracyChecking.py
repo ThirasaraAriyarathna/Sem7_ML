@@ -29,7 +29,5 @@ class AccuracyChecker:
         print("Best score: {}".format(np.abs(grid.best_score_)))
         print("Best params: {}".format(grid.best_params_))
 
-    def cross_validate_out_of_sample(self, reg, X_train, y_train, X_cross, y_cross):
-        reg.fit(X_train, y_train)
-        y_pred = reg.predict(X_cross)
+    def cross_validate_out_of_sample(self, y_pred, y_cross):
         print(mean_absolute_error(y_true=y_cross, y_pred=y_pred))
